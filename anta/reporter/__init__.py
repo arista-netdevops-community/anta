@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from anta.custom_types import TestStatus
     from anta.result_manager import ResultManager
+    from anta.result_manager.models import TestResult
 
 logger = logging.getLogger(__name__)
 
@@ -83,13 +84,7 @@ class ReportTable:
         color = RICH_COLOR_THEME.get(status, "")
         return f"[{color}]{status}" if color != "" else str(status)
 
-    def report_all(
-        self,
-        result_manager: ResultManager,
-        host: str | None = None,
-        testcase: str | None = None,
-        title: str = "All tests results",
-    ) -> Table:
+    def report_all(self, result_manager: ResultManager, title: str = "All tests results", ignore_state: str | None = None) -> Table:
         """Create a table report with all tests for one or all devices.
 
         Create table with full output: Host / Test / Status / Message
@@ -97,9 +92,8 @@ class ReportTable:
         Args:
         ----
             result_manager (ResultManager): A manager with a list of tests.
-            host (str, optional): IP Address of a host to search for. Defaults to None.
-            testcase (str, optional): A test name to search for. Defaults to None.
             title (str, optional): Title for the report. Defaults to 'All tests results'.
+            ignore_state (str, optional): Test status to ignore in the report. Default to None.
 
         Returns
         -------
@@ -110,13 +104,17 @@ class ReportTable:
         headers = ["Device", "Test Name", "Test Status", "Message(s)", "Test description", "Test category"]
         table = self._build_headers(headers=headers, table=table)
 
+        def add_line(table: Table, result: TestResult) -> Table:
+            state = self._color_result(result.result)
+            message = self._split_list_to_txt_list(result.messages) if len(result.messages) > 0 else ""
+            categories = ", ".join(result.categories)
+            table.add_row(str(result.name), result.test, state, message, result.description, categories)
+            return table
+
         for result in result_manager.get_results():
             # pylint: disable=R0916
-            if (host is None and testcase is None) or (host is not None and str(result.name) == host) or (testcase is not None and testcase == str(result.test)):
-                state = self._color_result(result.result)
-                message = self._split_list_to_txt_list(result.messages) if len(result.messages) > 0 else ""
-                categories = ", ".join(result.categories)
-                table.add_row(str(result.name), result.test, state, message, result.description, categories)
+            if ignore_state is None or result.result != ignore_state:
+                table = add_line(table=table, result=result)
         return table
 
     def report_summary_tests(
