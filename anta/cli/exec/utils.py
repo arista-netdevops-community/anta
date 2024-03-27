@@ -12,7 +12,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from aioeapi import EapiCommandError
 from click.exceptions import UsageError
@@ -20,6 +20,8 @@ from httpx import ConnectError, HTTPError
 
 from anta.device import AntaDevice, AsyncEOSDevice
 from anta.models import AntaCommand
+from anta.platform_utils import SUPPORT_HARDWARE_COUNTERS_SERIES, find_series_by_platform
+from anta.tools.get_item import get_item
 
 if TYPE_CHECKING:
     from anta.inventory import AntaInventory
@@ -30,17 +32,53 @@ logger = logging.getLogger(__name__)
 
 
 async def clear_counters_utils(anta_inventory: AntaInventory, tags: list[str] | None = None) -> None:
-    """Clear counters."""
+    """Clear counters on the devices in the inventory.
 
-    async def clear(dev: AntaDevice) -> None:
-        commands = [AntaCommand(command="clear counters")]
-        if dev.hw_model not in ["cEOSLab", "vEOS-lab"]:
-            commands.append(AntaCommand(command="clear hardware counter drop"))
-        await dev.collect_commands(commands=commands)
+    If the device is part of a series that supports hardware counters, the hardware counters are also cleared.
+
+    Arguments:
+    ----------
+      anta_inventory (AntaInventory): The ANTA inventory object containing the devices to connect to.
+      tags (list[str] | None): A list of tags to filter the devices to connect to.
+
+    """
+    # Commands to clear counters. Can be used later to add more commands if needed.
+    clear_counters_commands: list[dict[str, Any]] = [
+        {
+            "command": "clear counters",
+            "is_cleared": False,
+            "restricted_series": None,
+        },
+        {
+            "command": "clear hardware counter drop",
+            "is_cleared": False,
+            "restricted_series": SUPPORT_HARDWARE_COUNTERS_SERIES,
+        },
+    ]
+
+    async def clear(device: AntaDevice) -> None:
+        if not isinstance(device.hw_model, str):
+            logger.error("Could not clear counters on device %s because its hardware model is not set or invalid.", device.name)
+            return
+
+        platform_series = find_series_by_platform(device.hw_model)
+        commands = [
+            AntaCommand(command=command["command"])
+            for command in clear_counters_commands
+            if not command["restricted_series"] or platform_series in command["restricted_series"]
+        ]
+
+        await device.collect_commands(commands=commands)
+
         for command in commands:
-            if not command.collected:
-                logger.error("Could not clear counters on device %s: %s", dev.name, command.errors)
-        logger.info("Cleared counters on %s (%s)", dev.name, dev.hw_model)
+            if device.supports(command, log=False) and not command.collected:
+                logger.error("Could not '%s' on device %s: %s", command.command, device.name, command.errors)
+            else:
+                get_item(clear_counters_commands, "command", command.command)["is_cleared"] = True
+
+        # Log if any counters have been cleared
+        if any(cmd["is_cleared"] for cmd in clear_counters_commands):
+            logger.info("Cleared counters on %s (%s)", device.name, device.hw_model)
 
     logger.info("Connecting to devices...")
     await anta_inventory.connect_inventory()
