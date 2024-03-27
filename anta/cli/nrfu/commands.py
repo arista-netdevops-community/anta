@@ -11,6 +11,7 @@ import pathlib
 import click
 
 from anta.cli.utils import exit_with_code
+from anta.reporter.word import ReportWordDocx
 
 from .utils import print_jinja, print_json, print_table, print_text
 
@@ -81,4 +82,26 @@ def text(ctx: click.Context, search: str | None, *, skip_error: bool) -> None:
 def tpl_report(ctx: click.Context, template: pathlib.Path, output: pathlib.Path | None) -> None:
     """ANTA command to check network state with templated report."""
     print_jinja(results=ctx.obj["result_manager"], template=template, output=output)
+    exit_with_code(ctx)
+
+
+@click.command()
+@click.pass_context
+@click.option(
+    "--output",
+    "-o",
+    help="Save report in word format",
+    required=True,
+    type=click.Path(file_okay=True, dir_okay=False, exists=False, writable=True, path_type=pathlib.Path),
+)
+@click.option("--title", help="Report title", type=str, required=False)
+def report(ctx: click.Context, output: pathlib.Path, title: str) -> None:
+    """ANTA command to check network states with table result"""
+    print_text(results=ctx.obj["result_manager"])
+    if output is not None:
+        logger.info(f"creating word report under {output}")
+        docx = ReportWordDocx(filename=output, anta_result_manager=ctx.obj["result_manager"])
+        docx.report_template()
+    else:
+        logger.critical(f"Cannot save report for {title} becasue output variable is not set")
     exit_with_code(ctx)
