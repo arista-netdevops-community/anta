@@ -24,6 +24,7 @@ Here are the tests that we currently provide:
 - [Logging](tests.logging.md)
 - [MLAG](tests.mlag.md)
 - [Multicast](tests.multicast.md)
+- [Router Path Selection](tests.path_selection.md)
 - [Profiles](tests.profiles.md)
 - [PTP](tests.ptp.md)
 - [Routing Generic](tests.routing.generic.md)
