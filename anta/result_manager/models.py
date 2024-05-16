@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 from anta.custom_types import TestStatus
@@ -32,6 +34,8 @@ class TestResult(BaseModel):
     result: TestStatus = "unset"
     messages: list[str] = []
     custom_field: str | None = None
+    json_output: dict[str, Any] | None = None
+    text_output: str | None = None
 
     def is_success(self, message: str | None = None) -> None:
         """Set status to success.
